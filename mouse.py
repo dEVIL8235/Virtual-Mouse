@@ -9,57 +9,62 @@ import math
 # CONFIGURATION
 # ============================================================
 
-# Camera
+# ---------------- Camera ----------------
+
 CAMERA_WIDTH = 640
 CAMERA_HEIGHT = 480
 
-# Active area / ROI
-# Hand movement inside this box controls the full screen.
+
+# ---------------- Active Area / ROI ----------------
+
 FRAME_MARGIN = 90
 
-# Cursor smoothing
+
+# ---------------- Cursor ----------------
+
 BASE_SMOOTHING = 7
-
-# Cursor sensitivity
 CURSOR_SENSITIVITY = 1.30
-
-# Ignore tiny hand movements
 DEADZONE = 3
 
-
-# Adaptive smoothing
 SMOOTHING_FAST = 3
 SMOOTHING_MEDIUM = 5
 SMOOTHING_SLOW = 8
 
-# Distance thresholds for adaptive smoothing
 FAST_DISTANCE = 70
 MEDIUM_DISTANCE = 25
 
-# Gesture thresholds
-CLICK_THRESHOLD_Y = 45
-THUMB_UP_DOWN_THRESHOLD = 50
 
-# Gesture cooldowns
-RIGHT_CLICK_COOLDOWN = 0.5
-SCROLL_COOLDOWN = 0.10
+# ---------------- Gesture ----------------
 
-# Scroll
+# Pinch threshold is relative to palm size.
+# This makes the system adaptive when hand moves
+# closer/farther from the camera.
+PINCH_RATIO = 0.38
+
+# Minimum distance from camera required for gesture detection
+MIN_PALM_SIZE = 25
+
+
+# ---------------- Click ----------------
+
+CLICK_COOLDOWN = 0.25
+RIGHT_CLICK_COOLDOWN = 0.50
+
+
+# ---------------- Scroll ----------------
+
 SCROLL_AMOUNT = 7
+SCROLL_COOLDOWN = 0.15
 THUMB_SCROLL_THRESHOLD = 50
 
-# Drawing
-CIRCLE_RADIUS = 5
-CIRCLE_COLOR = (0, 255, 0)
-CIRCLE_THICKNESS = -1
 
-LINE_COLOR = (0, 255, 0)
-LINE_THICKNESS = 2
+# ---------------- Display ----------------
 
-# Display
 SHOW_LANDMARKS = True
 SHOW_ROI = True
 SHOW_FPS = True
+SHOW_HAND_LABEL = True
+SHOW_GESTURE = True
 
 
 # ============================================================
@@ -75,13 +80,24 @@ pyautogui.MINIMUM_DURATION = 0
 # ============================================================
 
 def init_webcam():
+
     cap = cv2.VideoCapture(0)
 
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
+    cap.set(
+        cv2.CAP_PROP_FRAME_WIDTH,
+        CAMERA_WIDTH
+    )
+
+    cap.set(
+        cv2.CAP_PROP_FRAME_HEIGHT,
+        CAMERA_HEIGHT
+    )
 
     if not cap.isOpened():
-        raise RuntimeError("Error: Could not open video device.")
+
+        raise RuntimeError(
+            "Error: Could not open video device."
+        )
 
     return cap
 
@@ -91,11 +107,15 @@ def init_webcam():
 # ============================================================
 
 def process_frame(frame):
-    # Mirror the camera
+
+    # Mirror camera
     frame = cv2.flip(frame, 1)
 
-    # OpenCV uses BGR, MediaPipe expects RGB
-    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    # BGR -> RGB
+    rgb_frame = cv2.cvtColor(
+        frame,
+        cv2.COLOR_BGR2RGB
+    )
 
     return frame, rgb_frame
 
@@ -104,7 +124,11 @@ def process_frame(frame):
 # DRAW HAND LANDMARKS
 # ============================================================
 
-def draw_landmarks(frame, hands, drawing_utils):
+def draw_landmarks(
+    frame,
+    hands,
+    drawing_utils
+):
 
     last_landmarks = None
 
@@ -114,30 +138,10 @@ def draw_landmarks(frame, hands, drawing_utils):
 
         if SHOW_LANDMARKS:
 
-            # Draw MediaPipe's standard hand connections
             drawing_utils.draw_landmarks(
                 frame,
                 hand
             )
-
-            # Draw landmark circles
-            for landmark in last_landmarks:
-
-                x = int(
-                    landmark.x * frame.shape[1]
-                )
-
-                y = int(
-                    landmark.y * frame.shape[0]
-                )
-
-                cv2.circle(
-                    frame,
-                    (x, y),
-                    CIRCLE_RADIUS,
-                    CIRCLE_COLOR,
-                    CIRCLE_THICKNESS
-                )
 
     return last_landmarks
 
@@ -154,7 +158,9 @@ def get_landmark_coordinates(
 
     coords = {}
 
-    for landmark_id, landmark in enumerate(landmarks):
+    for landmark_id, landmark in enumerate(
+        landmarks
+    ):
 
         x = int(
             landmark.x * frame_width
@@ -164,13 +170,16 @@ def get_landmark_coordinates(
             landmark.y * frame_height
         )
 
-        coords[landmark_id] = (x, y)
+        coords[landmark_id] = (
+            x,
+            y
+        )
 
     return coords
 
 
 # ============================================================
-# DRAW ACTIVE ROI
+# DRAW ACTIVE AREA
 # ============================================================
 
 def draw_active_area(
@@ -225,7 +234,6 @@ def map_to_screen(
 
     mapped_coords = {}
 
-    # Active camera region
     min_x = FRAME_MARGIN
     max_x = frame_width - FRAME_MARGIN
 
@@ -234,11 +242,18 @@ def map_to_screen(
 
     for landmark_id, (x, y) in coords.items():
 
-        # Keep coordinates inside active area
-        x = max(min_x, min(x, max_x))
-        y = max(min_y, min(y, max_y))
+        # Keep inside active area
+        x = max(
+            min_x,
+            min(x, max_x)
+        )
 
-        # Camera ROI -> Full screen
+        y = max(
+            min_y,
+            min(y, max_y)
+        )
+
+        # Camera -> Screen
         mapped_x = (
             (x - min_x)
             / (max_x - min_x)
@@ -251,15 +266,21 @@ def map_to_screen(
             * screen_height
         )
 
-        # Keep cursor safely inside screen
+        # Safety limits
         mapped_x = max(
             0,
-            min(mapped_x, screen_width - 1)
+            min(
+                mapped_x,
+                screen_width - 1
+            )
         )
 
         mapped_y = max(
             0,
-            min(mapped_y, screen_height - 1)
+            min(
+                mapped_y,
+                screen_height - 1
+            )
         )
 
         mapped_coords[landmark_id] = (
@@ -277,76 +298,57 @@ def map_to_screen(
 def move_cursor(
     index_coords,
     plocx,
-    plocy,
-    smoothening
+    plocy
 ):
 
     index_x, index_y = index_coords
 
-    # Difference between target and previous cursor position
+    # Difference
     dx = index_x - plocx
     dy = index_y - plocy
 
-    # --------------------------------------------------------
-    # DEADZONE
-    # --------------------------------------------------------
-
+    # Deadzone
     if abs(dx) < DEADZONE:
         dx = 0
 
     if abs(dy) < DEADZONE:
         dy = 0
 
-    # --------------------------------------------------------
-    # APPLY CURSOR SENSITIVITY
-    # --------------------------------------------------------
-    # Makes cursor travel farther for the same hand movement.
-
+    # Sensitivity
     dx *= CURSOR_SENSITIVITY
     dy *= CURSOR_SENSITIVITY
 
-    # --------------------------------------------------------
-    # MOVEMENT DISTANCE
-    # --------------------------------------------------------
-
-    distance = math.sqrt(
-        dx * dx + dy * dy
+    # Movement distance
+    distance = math.hypot(
+        dx,
+        dy
     )
 
-    # --------------------------------------------------------
-    # ADAPTIVE SMOOTHING
-    # --------------------------------------------------------
-
+    # Adaptive smoothing
     if distance < MEDIUM_DISTANCE:
 
-        current_smoothing = SMOOTHING_SLOW
+        smoothing = SMOOTHING_SLOW
 
     elif distance < FAST_DISTANCE:
 
-        current_smoothing = SMOOTHING_MEDIUM
+        smoothing = SMOOTHING_MEDIUM
 
     else:
 
-        current_smoothing = SMOOTHING_FAST
+        smoothing = SMOOTHING_FAST
 
-    # --------------------------------------------------------
-    # SMOOTH CURSOR MOVEMENT
-    # --------------------------------------------------------
-
+    # Smooth movement
     clocx = (
         plocx
-        + dx / current_smoothing
+        + dx / smoothing
     )
 
     clocy = (
         plocy
-        + dy / current_smoothing
+        + dy / smoothing
     )
 
-    # --------------------------------------------------------
-    # MOVE ACTUAL MOUSE
-    # --------------------------------------------------------
-
+    # Move mouse
     pyautogui.moveTo(
         int(clocx),
         int(clocy),
@@ -355,110 +357,259 @@ def move_cursor(
 
     return clocx, clocy
 
+
 # ============================================================
 # GESTURE DETECTION
 # ============================================================
 
 def detect_gestures(
     coords,
-    thumb_coords,
-    click_time,
-    click_threshold,
-    single_click_flag,
-    left_dragging,
+    click_active,
+    right_click_active,
+    dragging,
+    last_click_time,
     last_right_click_time,
     last_scroll_time
 ):
 
-    thumb_x, thumb_y = thumb_coords
-
     current_time = time.time()
 
+    gesture_name = "None"
+
     # ========================================================
-    # LEFT CLICK
+    # DISTANCE FUNCTION
     # ========================================================
 
-    index_thumb_y_distance = abs(
-        coords[8][1] - thumb_y
+    def distance(
+        point1,
+        point2
+    ):
+
+        return math.hypot(
+            point1[0] - point2[0],
+            point1[1] - point2[1]
+        )
+
+    # ========================================================
+    # PALM SIZE
+    # ========================================================
+
+    palm_size = distance(
+        coords[0],   # Wrist
+        coords[9]    # Middle MCP
     )
 
-    if index_thumb_y_distance < CLICK_THRESHOLD_Y:
+    # Hand too small / too far
+    if palm_size < MIN_PALM_SIZE:
 
-        if (
-            current_time - click_time
-            < click_threshold
-        ):
+        return (
+            click_active,
+            right_click_active,
+            dragging,
+            last_click_time,
+            last_right_click_time,
+            last_scroll_time,
+            gesture_name
+        )
 
-            pyautogui.doubleClick()
+    # ========================================================
+    # ADAPTIVE PINCH THRESHOLD
+    # ========================================================
 
-            click_time = 0
+    pinch_threshold = (
+        palm_size * PINCH_RATIO
+    )
 
-        else:
+    # ========================================================
+    # THUMB
+    # ========================================================
 
-            if not single_click_flag:
+    thumb = coords[4]
 
-                pyautogui.click()
+    # ========================================================
+    # FINGER DISTANCES
+    # ========================================================
 
-                single_click_flag = True
+    index_distance = distance(
+        thumb,
+        coords[8]
+    )
 
-            click_time = current_time
+    middle_distance = distance(
+        thumb,
+        coords[12]
+    )
 
-    else:
+    ring_distance = distance(
+        thumb,
+        coords[16]
+    )
 
-        single_click_flag = False
+    # ========================================================
+    # PINCH STATES
+    # ========================================================
+
+    index_pinch = (
+        index_distance
+        < pinch_threshold
+    )
+
+    middle_pinch = (
+        middle_distance
+        < pinch_threshold
+    )
+
+    ring_pinch = (
+        ring_distance
+        < pinch_threshold
+    )
+
+    # ========================================================
+    # GESTURE PRIORITY
+    #
+    # Drag
+    #   ↓
+    # Right Click
+    #   ↓
+    # Left Click
+    #   ↓
+    # Scroll
+    # ========================================================
+
 
     # ========================================================
     # DRAG
+    # Thumb + Ring
     # ========================================================
 
-    ring_thumb_y_distance = abs(
-        coords[16][1] - thumb_y
-    )
+    if ring_pinch:
 
-    if ring_thumb_y_distance < CLICK_THRESHOLD_Y:
+        gesture_name = "DRAG"
 
-        if not left_dragging:
+        if not dragging:
 
             pyautogui.mouseDown()
 
-            left_dragging = True
+            dragging = True
+
+        # Disable click states while dragging
+        click_active = False
+        right_click_active = False
+
+        return (
+            click_active,
+            right_click_active,
+            dragging,
+            last_click_time,
+            last_right_click_time,
+            last_scroll_time,
+            gesture_name
+        )
 
     else:
 
-        if left_dragging:
+        if dragging:
 
             pyautogui.mouseUp()
 
-            left_dragging = False
+            dragging = False
+
 
     # ========================================================
     # RIGHT CLICK
+    # Thumb + Middle
     # ========================================================
 
-    middle_thumb_y_distance = abs(
-        coords[12][1] - thumb_y
+    if middle_pinch:
+
+        gesture_name = "RIGHT CLICK"
+
+        if not right_click_active:
+
+            if (
+                current_time
+                - last_right_click_time
+                > RIGHT_CLICK_COOLDOWN
+            ):
+
+                pyautogui.rightClick()
+
+                last_right_click_time = (
+                    current_time
+                )
+
+                right_click_active = True
+
+        click_active = False
+
+        return (
+            click_active,
+            right_click_active,
+            dragging,
+            last_click_time,
+            last_right_click_time,
+            last_scroll_time,
+            gesture_name
+        )
+
+    else:
+
+        right_click_active = False
+
+
+    # ========================================================
+    # LEFT CLICK
+    # Thumb + Index
+    # ========================================================
+
+    if index_pinch:
+
+        gesture_name = "LEFT CLICK"
+
+        if not click_active:
+
+            if (
+                current_time
+                - last_click_time
+                > CLICK_COOLDOWN
+            ):
+
+                pyautogui.click()
+
+                last_click_time = (
+                    current_time
+                )
+
+                click_active = True
+
+    else:
+
+        click_active = False
+
+
+    # ========================================================
+    # FINGER FOLD DETECTION
+    # ========================================================
+
+    index_folded = (
+        coords[8][1]
+        > coords[6][1]
     )
 
-    if middle_thumb_y_distance < CLICK_THRESHOLD_Y:
+    middle_folded = (
+        coords[12][1]
+        > coords[10][1]
+    )
 
-        if (
-            current_time - last_right_click_time
-            > RIGHT_CLICK_COOLDOWN
-        ):
+    ring_folded = (
+        coords[16][1]
+        > coords[14][1]
+    )
 
-            pyautogui.rightClick()
-
-            last_right_click_time = current_time
-
-   # ========================================================
-   # SCROLL GESTURE DETECTION
-   # ========================================================
-
-   # Check whether four main fingers are folded
-    index_folded = coords[8][1] > coords[6][1]
-    middle_folded = coords[12][1] > coords[10][1]
-    ring_folded = coords[16][1] > coords[14][1]
-    pinky_folded = coords[20][1] > coords[18][1]
+    pinky_folded = (
+        coords[20][1]
+        > coords[18][1]
+    )
 
     all_fingers_folded = (
         index_folded
@@ -467,41 +618,79 @@ def detect_gestures(
         and pinky_folded
     )
 
+
     # ========================================================
-    # THUMBS UP / DOWN
+    # SCROLL
     # ========================================================
 
-    if all_fingers_folded:
+    if (
+        all_fingers_folded
+        and not index_pinch
+        and not middle_pinch
+        and not ring_pinch
+    ):
 
-        thumb_tip_y = coords[4][1]
+        thumb_y = coords[4][1]
         wrist_y = coords[0][1]
 
-    # ----------------------------------------------------
-    # THUMBS UP → SCROLL UP
-    # ----------------------------------------------------
+        # ----------------------------------------------------
+        # THUMB UP
+        # ----------------------------------------------------
 
-        if thumb_tip_y < wrist_y - THUMB_SCROLL_THRESHOLD:
+        if (
+            thumb_y
+            < wrist_y - THUMB_SCROLL_THRESHOLD
+        ):
 
-            if  current_time - last_scroll_time > SCROLL_COOLDOWN:
-                pyautogui.scroll(SCROLL_AMOUNT)
-                last_scroll_time = current_time
+            gesture_name = "SCROLL UP"
 
-    # ----------------------------------------------------
-    # THUMBS DOWN → SCROLL DOWN
-    # ----------------------------------------------------
+            if (
+                current_time
+                - last_scroll_time
+                > SCROLL_COOLDOWN
+            ):
 
-        elif thumb_tip_y > wrist_y + THUMB_SCROLL_THRESHOLD:
+                pyautogui.scroll(
+                    SCROLL_AMOUNT
+                )
 
-            if current_time - last_scroll_time > SCROLL_COOLDOWN:
-                pyautogui.scroll( -SCROLL_AMOUNT  )
-                last_scroll_time = current_time
+                last_scroll_time = (
+                    current_time
+                )
+
+        # ----------------------------------------------------
+        # THUMB DOWN
+        # ----------------------------------------------------
+
+        elif (
+            thumb_y
+            > wrist_y + THUMB_SCROLL_THRESHOLD
+        ):
+
+            gesture_name = "SCROLL DOWN"
+
+            if (
+                current_time
+                - last_scroll_time
+                > SCROLL_COOLDOWN
+            ):
+
+                pyautogui.scroll(
+                    -SCROLL_AMOUNT
+                )
+
+                last_scroll_time = (
+                    current_time
+                )
 
     return (
-        click_time,
-        single_click_flag,
-        left_dragging,
+        click_active,
+        right_click_active,
+        dragging,
+        last_click_time,
         last_right_click_time,
-        last_scroll_time
+        last_scroll_time,
+        gesture_name
     )
 
 
@@ -526,13 +715,14 @@ def add_user_instructions(frame):
         "Thumb Up/Down : Scroll",
 
         "ESC           : Exit"
-
     ]
 
     y0 = 25
     dy = 28
 
-    for i, line in enumerate(instructions):
+    for i, line in enumerate(
+        instructions
+    ):
 
         y = y0 + i * dy
 
@@ -549,10 +739,13 @@ def add_user_instructions(frame):
 
 
 # ============================================================
-# FPS CALCULATION
+# FPS
 # ============================================================
 
-def draw_fps(frame, fps):
+def draw_fps(
+    frame,
+    fps
+):
 
     if not SHOW_FPS:
         return
@@ -570,25 +763,65 @@ def draw_fps(frame, fps):
 
 
 # ============================================================
+# HAND INFORMATION
+# ============================================================
+
+def draw_hand_info(
+    frame,
+    hand_label,
+    gesture_name
+):
+
+    if SHOW_HAND_LABEL:
+
+        cv2.putText(
+            frame,
+            f"Hand: {hand_label}",
+            (10, 275),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (0, 255, 0),
+            2,
+            cv2.LINE_AA
+        )
+
+    if SHOW_GESTURE:
+
+        cv2.putText(
+            frame,
+            f"Gesture: {gesture_name}",
+            (10, 305),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (0, 255, 255),
+            2,
+            cv2.LINE_AA
+        )
+
+
+# ============================================================
 # MAIN
 # ============================================================
 
 def main():
 
-    # --------------------------------------------------------
-    # INITIALIZE CAMERA
-    # --------------------------------------------------------
+    # ========================================================
+    # CAMERA
+    # ========================================================
 
     cap = init_webcam()
 
-    # --------------------------------------------------------
-    # INITIALIZE MEDIAPIPE
-    # --------------------------------------------------------
+
+    # ========================================================
+    # MEDIAPIPE
+    # ========================================================
 
     hand_detector = mp.solutions.hands.Hands(
 
         static_image_mode=False,
 
+        # One hand is enough.
+        # Either Left OR Right hand can control the mouse.
         max_num_hands=1,
 
         model_complexity=0,
@@ -596,61 +829,55 @@ def main():
         min_detection_confidence=0.6,
 
         min_tracking_confidence=0.6
-
     )
 
-    drawing_utils = mp.solutions.drawing_utils
+    drawing_utils = (
+        mp.solutions.drawing_utils
+    )
 
-    # --------------------------------------------------------
-    # SCREEN SIZE
-    # --------------------------------------------------------
 
-    screen_width, screen_height = pyautogui.size()
+    # ========================================================
+    # SCREEN
+    # ========================================================
 
-    # --------------------------------------------------------
+    screen_width, screen_height = (
+        pyautogui.size()
+    )
+
+
+    # ========================================================
     # CURSOR STATE
-    # --------------------------------------------------------
-
-    smoothening = BASE_SMOOTHING
+    # ========================================================
 
     plocx = screen_width / 2
     plocy = screen_height / 2
 
-    # --------------------------------------------------------
-    # CLICK STATE
-    # --------------------------------------------------------
 
-    click_time = 0
+    # ========================================================
+    # GESTURE STATE
+    # ========================================================
 
-    click_threshold = 0.3
+    click_active = False
 
-    single_click_flag = False
+    right_click_active = False
 
-    # --------------------------------------------------------
-    # DRAG STATE
-    # --------------------------------------------------------
+    dragging = False
 
-    left_dragging = False
-
-    # --------------------------------------------------------
-    # RIGHT CLICK STATE
-    # --------------------------------------------------------
+    last_click_time = 0
 
     last_right_click_time = 0
 
-    # --------------------------------------------------------
-    # SCROLL STATE
-    # --------------------------------------------------------
-
     last_scroll_time = 0
 
-    # --------------------------------------------------------
-    # FPS VARIABLES
-    # --------------------------------------------------------
+
+    # ========================================================
+    # FPS
+    # ========================================================
 
     previous_time = time.time()
 
     fps = 0
+
 
     # ========================================================
     # MAIN LOOP
@@ -660,9 +887,9 @@ def main():
 
         while True:
 
-            # ------------------------------------------------
-            # READ CAMERA FRAME
-            # ------------------------------------------------
+            # ==================================================
+            # READ CAMERA
+            # ==================================================
 
             ret, frame = cap.read()
 
@@ -674,21 +901,23 @@ def main():
 
                 break
 
-            # ------------------------------------------------
-            # PROCESS FRAME
-            # ------------------------------------------------
 
-            frame, rgb_frame = process_frame(
-                frame
+            # ==================================================
+            # PROCESS FRAME
+            # ==================================================
+
+            frame, rgb_frame = (
+                process_frame(frame)
             )
 
             frame_height, frame_width, _ = (
                 frame.shape
             )
 
-            # ------------------------------------------------
-            # DRAW ACTIVE AREA
-            # ------------------------------------------------
+
+            # ==================================================
+            # ACTIVE AREA
+            # ==================================================
 
             draw_active_area(
                 frame,
@@ -696,25 +925,35 @@ def main():
                 frame_height
             )
 
-            # ------------------------------------------------
-            # MEDIAPIPE HAND DETECTION
-            # ------------------------------------------------
+
+            # ==================================================
+            # MEDIAPIPE
+            # ==================================================
 
             output = hand_detector.process(
                 rgb_frame
             )
 
-            hands = output.multi_hand_landmarks
+            hands = (
+                output.multi_hand_landmarks
+            )
 
-            # ------------------------------------------------
+            handedness = (
+                output.multi_handedness
+            )
+
+
+            # ==================================================
             # HAND FOUND
-            # ------------------------------------------------
+            # ==================================================
+
+            gesture_name = "None"
 
             if hands:
 
-                # --------------------------------------------
-                # LANDMARKS
-                # --------------------------------------------
+                # ----------------------------------------------
+                # GET LANDMARKS
+                # ----------------------------------------------
 
                 landmarks = draw_landmarks(
                     frame,
@@ -722,93 +961,136 @@ def main():
                     drawing_utils
                 )
 
+
                 if landmarks is not None:
 
-                    # ----------------------------------------
-                    # CAMERA COORDINATES
-                    # ----------------------------------------
+                    # ------------------------------------------
+                    # RAW CAMERA COORDINATES
+                    # ------------------------------------------
 
-                    coords = get_landmark_coordinates(
-                        landmarks,
-                        frame_width,
-                        frame_height
+                    coords = (
+                        get_landmark_coordinates(
+                            landmarks,
+                            frame_width,
+                            frame_height
+                        )
                     )
 
-                    # ----------------------------------------
+
+                    # ------------------------------------------
+                    # HAND LABEL
+                    # ------------------------------------------
+
+                    hand_label = "Unknown"
+
+                    if handedness:
+
+                        hand_label = (
+                            handedness[0]
+                            .classification[0]
+                            .label
+                        )
+
+
+                    # ------------------------------------------
                     # SCREEN COORDINATES
-                    # ----------------------------------------
+                    #
+                    # ONLY used for cursor movement.
+                    # ------------------------------------------
 
-                    mapped_coords = map_to_screen(
-                        coords,
-                        screen_width,
-                        screen_height,
-                        frame_width,
-                        frame_height
+                    mapped_coords = (
+                        map_to_screen(
+                            coords,
+                            screen_width,
+                            screen_height,
+                            frame_width,
+                            frame_height
+                        )
                     )
 
-                    # ----------------------------------------
+
+                    # ------------------------------------------
                     # MOVE CURSOR
-                    # ----------------------------------------
+                    #
+                    # Index fingertip = landmark 8
+                    # ------------------------------------------
 
-                    clocx, clocy = move_cursor(
-                        mapped_coords[8],
-                        plocx,
-                        plocy,
-                        smoothening
+                    clocx, clocy = (
+                        move_cursor(
+                            mapped_coords[8],
+                            plocx,
+                            plocy
+                        )
                     )
-
-                    # ----------------------------------------
-                    # SAVE CURRENT POSITION
-                    # ----------------------------------------
 
                     plocx = clocx
                     plocy = clocy
 
-                    # ----------------------------------------
-                    # DETECT GESTURES
-                    # ----------------------------------------
+
+                    # ------------------------------------------
+                    # GESTURE DETECTION
+                    #
+                    # IMPORTANT:
+                    # RAW coords are passed here.
+                    #
+                    # NOT mapped_coords.
+                    # ------------------------------------------
 
                     (
-                        click_time,
-                        single_click_flag,
-                        left_dragging,
+                        click_active,
+                        right_click_active,
+                        dragging,
+                        last_click_time,
                         last_right_click_time,
-                        last_scroll_time
+                        last_scroll_time,
+                        gesture_name
                     ) = detect_gestures(
 
-                        mapped_coords,
+                        coords,
 
-                        mapped_coords[4],
+                        click_active,
 
-                        click_time,
+                        right_click_active,
 
-                        click_threshold,
+                        dragging,
 
-                        single_click_flag,
-
-                        left_dragging,
+                        last_click_time,
 
                         last_right_click_time,
 
                         last_scroll_time
                     )
 
-            # ------------------------------------------------
-            # USER INSTRUCTIONS
-            # ------------------------------------------------
+
+                    # ------------------------------------------
+                    # DISPLAY HAND + GESTURE
+                    # ------------------------------------------
+
+                    draw_hand_info(
+                        frame,
+                        hand_label,
+                        gesture_name
+                    )
+
+
+            # ==================================================
+            # INSTRUCTIONS
+            # ==================================================
 
             add_user_instructions(
                 frame
             )
 
-            # ------------------------------------------------
+
+            # ==================================================
             # FPS
-            # ------------------------------------------------
+            # ==================================================
 
             current_time = time.time()
 
             time_difference = (
-                current_time - previous_time
+                current_time
+                - previous_time
             )
 
             if time_difference > 0:
@@ -817,7 +1099,6 @@ def main():
                     1 / time_difference
                 )
 
-                # Smooth FPS display
                 fps = (
                     0.9 * fps
                     + 0.1 * current_fps
@@ -830,48 +1111,57 @@ def main():
                 fps
             )
 
-            # ------------------------------------------------
-            # SHOW CAMERA
-            # ------------------------------------------------
+
+            # ==================================================
+            # DISPLAY
+            # ==================================================
 
             cv2.imshow(
                 "Virtual Mouse",
                 frame
             )
 
-            # ------------------------------------------------
-            # ESC TO EXIT
-            # ------------------------------------------------
 
-            if cv2.waitKey(1) & 0xFF == 27:
+            # ==================================================
+            # ESC
+            # ==================================================
+
+            if (
+                cv2.waitKey(1) & 0xFF
+                == 27
+            ):
 
                 break
 
+
     finally:
 
-        # ----------------------------------------------------
-        # RELEASE DRAG IF PROGRAM EXITS DURING DRAG
-        # ----------------------------------------------------
+        # ======================================================
+        # RELEASE MOUSE IF DRAGGING
+        # ======================================================
 
-        if left_dragging:
+        if dragging:
 
             pyautogui.mouseUp()
 
-        # ----------------------------------------------------
+
+        # ======================================================
         # RELEASE CAMERA
-        # ----------------------------------------------------
+        # ======================================================
 
         cap.release()
 
-        # ----------------------------------------------------
+
+        # ======================================================
         # CLOSE WINDOWS
-        # ----------------------------------------------------
+        # ======================================================
 
         cv2.destroyAllWindows()
 
-        # ----------------------------------------------------
+
+        # ======================================================
         # CLOSE MEDIAPIPE
-        # ----------------------------------------------------
+        # ======================================================
 
         hand_detector.close()
 
